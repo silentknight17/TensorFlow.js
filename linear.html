@@ -1,0 +1,97 @@
+<html>
+    <head>
+
+
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+        
+       
+    </head>
+    <body>
+        <script type="text/javascript">
+            async function run () {
+
+                //Making the backend of the tensorFlow ready for the operation!
+                await tf.ready();
+
+                //Loading the dataset!
+                const houseSalesDataSet = tf.data.csv("./kc_house_data.csv");
+                const sampleDataSet =  houseSalesDataSet.take(10);
+                const dataArray = await sampleDataSet.toArray();
+                console.log(dataArray);
+
+                //Making the data ready for plotting. Extract x and y values to plot
+                const pointsDataset = houseSalesDataSet.map((record) => ({
+                    x: record.sqft_living, y: record.price
+                }))
+
+                const points = await pointsDataset.toArray();
+                tf.util.shuffle(points);
+                plot(points, 'Square Feet');
+
+                //For odd number of length, we need to remove one data to make it even and equally split it in training and testing set!
+                if(points.length%2 !== 0)
+                {
+                    points.pop();
+                }
+
+                //Extracting the feature and storing it in a tensor!
+                const featureValues = points.map( item => item.x);
+                const featureTensor = tf.tensor2d(featureValues, [featureValues.length, 1]);
+
+                //Extracting the label and storing it in a tensor
+                //[labelValues.length, 1] is the dimension -> column vector!
+                const labelValues = points.map(item => item.y);
+                const labelTensor = tf.tensor2d(labelValues, [labelValues.length,1]);
+
+                //Normalising the dataset 
+                const normalisedFeature = normalise(featureTensor);
+                const normalisedLabel = normalise(labelTensor);
+
+                //normalisedFeature.tensor.print();
+
+                //Splitting the dataset
+
+                const [trainingFeatures, testingFeatures] = tf.split(normalisedFeature.tensor,2);
+                const [trainingLabels, testingLables] = tf.split(normalisedLabel.tensor,2);
+
+                trainingFeatures.print(true);
+
+                //Check the memory usage
+                console.log(tf.memory());
+            }
+             
+            run();
+ 
+            //Function to plot the graph!
+            function plot (points, featureName) {
+                tfvis.render.scatterplot(
+                    {name:`${featureName} vs House Price`},
+                    {values: [points], series: ['original']},
+                    {
+                        xLabel: featureName,
+                        yLabel: 'Price',
+                    }
+                );
+            }
+
+            //Function to normalise the dataset
+            function normalise (tensor) {
+                const max =tensor.max();
+                const min  = tensor.min();
+                const normalisedTensor = tensor.sub(min).div(max.sub(min));
+                return {
+                    tensor: normalisedTensor, min, max
+                };
+            }
+
+            //Function to denormalise the dataset
+            function denormalise(tensor, min, max){
+                return tensor.mul(max.sub(min)).add(min);
+            }
+
+            
+
+        </script>
+    </body>
+</html>
