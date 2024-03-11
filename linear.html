@@ -9,6 +9,43 @@
     </head>
     <body>
         <script type="text/javascript">
+
+            function createModel() {
+                const model = tf.sequential();
+
+        
+
+                model.add(tf.layers.dense({
+                    inputDim: 1,
+                    units: 1,
+                    activation: 'linear',
+                    useBias: true,
+                }))
+
+                return model;
+            }
+
+            //epochs -> How many times the training is going to run!
+            async function trainModel(model, trainingFeatureTensor, trainingLabelTensor) {
+
+                //Visualizing the loss
+                const {onBatchEnd, onEpochEnd} = tfvis.show.fitCallbacks(
+                    {name: "Training Performance"},
+                    ['loss']
+                )
+
+
+
+               return model.fit(trainingFeatureTensor, trainingLabelTensor, {
+                    batchSize:512,
+                    epochs: 20,
+                    validationSplit: 0.2,
+                    callbacks:{
+                        onEpochEnd, onBatchEnd
+                    }
+                });
+            }
+
             async function run () {
 
                 //Making the backend of the tensorFlow ready for the operation!
@@ -59,6 +96,35 @@
 
                 //Check the memory usage
                 console.log(tf.memory());
+
+                //Defining a model
+                const model = createModel();
+                //model.summary();
+                tfvis.show.modelSummary({name: "Model Summary"}, model);
+
+                //Showing the layer
+                const layer = model.getLayer(undefined, 0);
+                tfvis.show.layer({name:"Layer 1"}, layer);
+
+                //Compiling the model
+                const optimizer = tf.train.sgd(0.1);
+                model.compile({
+                    loss: 'meanSquaredError',
+                    optimizer,
+                })
+
+                //Training the model
+                const result =  await trainModel(model, trainingFeatures, trainingLabels);
+                const trainingLoss = result.history.loss.pop();
+                console.log(`Training set loss: ${trainingLoss}`);
+
+                const validationLoss = result.history.val_loss.pop();
+                console.log(`Validation set loss: ${validationLoss}`);
+                
+                const lossTensor = model.evaluate(testingFeatures, testingLables);
+                const loss = await lossTensor.dataSync();
+                console.log(`Testing set loss: ${loss}`);
+
             }
              
             run();
