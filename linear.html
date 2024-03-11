@@ -1,163 +1,178 @@
 <html>
-    <head>
+  <head>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css"
+    />
+    <link
+      href="https://fonts.googleapis.com/icon?family=Material+Icons"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <script type="text/javascript">
+      function createModel() {
+        const model = tf.sequential();
 
+        model.add(
+          tf.layers.dense({
+            inputDim: 1,
+            units: 1,
+            activation: "linear",
+            useBias: true,
+          }),
+        );
 
-        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs/dist/tf.min.js"></script>
-        <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-vis"></script>
-        
-       
-    </head>
-    <body>
-        <script type="text/javascript">
+        return model;
+      }
 
-            function createModel() {
-                const model = tf.sequential();
+      //epochs -> How many times the training is going to run!
+      async function trainModel(
+        model,
+        trainingFeatureTensor,
+        trainingLabelTensor,
+      ) {
+        //Visualizing the loss
+        const { onBatchEnd, onEpochEnd } = tfvis.show.fitCallbacks(
+          { name: "Training Performance" },
+          ["loss"],
+        );
 
-        
+        return model.fit(trainingFeatureTensor, trainingLabelTensor, {
+          batchSize: 512,
+          epochs: 20,
+          validationSplit: 0.2,
+          callbacks: {
+            onEpochEnd,
+            onBatchEnd,
+          },
+        });
+      }
 
-                model.add(tf.layers.dense({
-                    inputDim: 1,
-                    units: 1,
-                    activation: 'linear',
-                    useBias: true,
-                }))
+      async function run() {
+        //Making the backend of the tensorFlow ready for the operation!
+        await tf.ready();
 
-                return model;
-            }
+        //Loading the dataset!
+        const houseSalesDataSet = tf.data.csv("./kc_house_data.csv");
+        const sampleDataSet = houseSalesDataSet.take(10);
+        const dataArray = await sampleDataSet.toArray();
+        console.log(dataArray);
 
-            //epochs -> How many times the training is going to run!
-            async function trainModel(model, trainingFeatureTensor, trainingLabelTensor) {
+        //Making the data ready for plotting. Extract x and y values to plot
+        const pointsDataset = houseSalesDataSet.map((record) => ({
+          x: record.sqft_living,
+          y: record.price,
+        }));
 
-                //Visualizing the loss
-                const {onBatchEnd, onEpochEnd} = tfvis.show.fitCallbacks(
-                    {name: "Training Performance"},
-                    ['loss']
-                )
+        const points = await pointsDataset.toArray();
+        tf.util.shuffle(points);
+        plot(points, "Square Feet");
 
+        //For odd number of length, we need to remove one data to make it even and equally split it in training and testing set!
+        if (points.length % 2 !== 0) {
+          points.pop();
+        }
 
+        //Extracting the feature and storing it in a tensor!
+        const featureValues = points.map((item) => item.x);
+        const featureTensor = tf.tensor2d(featureValues, [
+          featureValues.length,
+          1,
+        ]);
 
-               return model.fit(trainingFeatureTensor, trainingLabelTensor, {
-                    batchSize:512,
-                    epochs: 20,
-                    validationSplit: 0.2,
-                    callbacks:{
-                        onEpochEnd, onBatchEnd
-                    }
-                });
-            }
+        //Extracting the label and storing it in a tensor
+        //[labelValues.length, 1] is the dimension -> column vector!
+        const labelValues = points.map((item) => item.y);
+        const labelTensor = tf.tensor2d(labelValues, [labelValues.length, 1]);
 
-            async function run () {
+        //Normalising the dataset
+        const normalisedFeature = normalise(featureTensor);
+        const normalisedLabel = normalise(labelTensor);
 
-                //Making the backend of the tensorFlow ready for the operation!
-                await tf.ready();
+        //normalisedFeature.tensor.print();
 
-                //Loading the dataset!
-                const houseSalesDataSet = tf.data.csv("./kc_house_data.csv");
-                const sampleDataSet =  houseSalesDataSet.take(10);
-                const dataArray = await sampleDataSet.toArray();
-                console.log(dataArray);
+        //Splitting the dataset
 
-                //Making the data ready for plotting. Extract x and y values to plot
-                const pointsDataset = houseSalesDataSet.map((record) => ({
-                    x: record.sqft_living, y: record.price
-                }))
+        const [trainingFeatures, testingFeatures] = tf.split(
+          normalisedFeature.tensor,
+          2,
+        );
+        const [trainingLabels, testingLables] = tf.split(
+          normalisedLabel.tensor,
+          2,
+        );
 
-                const points = await pointsDataset.toArray();
-                tf.util.shuffle(points);
-                plot(points, 'Square Feet');
+        trainingFeatures.print(true);
 
-                //For odd number of length, we need to remove one data to make it even and equally split it in training and testing set!
-                if(points.length%2 !== 0)
-                {
-                    points.pop();
-                }
+        //Check the memory usage
+        console.log(tf.memory());
 
-                //Extracting the feature and storing it in a tensor!
-                const featureValues = points.map( item => item.x);
-                const featureTensor = tf.tensor2d(featureValues, [featureValues.length, 1]);
+        //Defining a model
+        const model = createModel();
+        //model.summary();
+        tfvis.show.modelSummary({ name: "Model Summary" }, model);
 
-                //Extracting the label and storing it in a tensor
-                //[labelValues.length, 1] is the dimension -> column vector!
-                const labelValues = points.map(item => item.y);
-                const labelTensor = tf.tensor2d(labelValues, [labelValues.length,1]);
+        //Showing the layer
+        const layer = model.getLayer(undefined, 0);
+        tfvis.show.layer({ name: "Layer 1" }, layer);
 
-                //Normalising the dataset 
-                const normalisedFeature = normalise(featureTensor);
-                const normalisedLabel = normalise(labelTensor);
+        //Compiling the model
+        const optimizer = tf.train.sgd(0.1);
+        model.compile({
+          loss: "meanSquaredError",
+          optimizer,
+        });
 
-                //normalisedFeature.tensor.print();
+        //Training the model
+        const result = await trainModel(
+          model,
+          trainingFeatures,
+          trainingLabels,
+        );
+        const trainingLoss = result.history.loss.pop();
+        console.log(`Training set loss: ${trainingLoss}`);
 
-                //Splitting the dataset
+        const validationLoss = result.history.val_loss.pop();
+        console.log(`Validation set loss: ${validationLoss}`);
 
-                const [trainingFeatures, testingFeatures] = tf.split(normalisedFeature.tensor,2);
-                const [trainingLabels, testingLables] = tf.split(normalisedLabel.tensor,2);
+        const lossTensor = model.evaluate(testingFeatures, testingLables);
+        const loss = await lossTensor.dataSync();
+        console.log(`Testing set loss: ${loss}`);
+      }
 
-                trainingFeatures.print(true);
+      run();
 
-                //Check the memory usage
-                console.log(tf.memory());
+      //Function to plot the graph!
+      function plot(points, featureName) {
+        tfvis.render.scatterplot(
+          { name: `${featureName} vs House Price` },
+          { values: [points], series: ["original"] },
+          {
+            xLabel: featureName,
+            yLabel: "Price",
+          },
+        );
+      }
 
-                //Defining a model
-                const model = createModel();
-                //model.summary();
-                tfvis.show.modelSummary({name: "Model Summary"}, model);
+      //Function to normalise the dataset
+      function normalise(tensor) {
+        const max = tensor.max();
+        const min = tensor.min();
+        const normalisedTensor = tensor.sub(min).div(max.sub(min));
+        return {
+          tensor: normalisedTensor,
+          min,
+          max,
+        };
+      }
 
-                //Showing the layer
-                const layer = model.getLayer(undefined, 0);
-                tfvis.show.layer({name:"Layer 1"}, layer);
-
-                //Compiling the model
-                const optimizer = tf.train.sgd(0.1);
-                model.compile({
-                    loss: 'meanSquaredError',
-                    optimizer,
-                })
-
-                //Training the model
-                const result =  await trainModel(model, trainingFeatures, trainingLabels);
-                const trainingLoss = result.history.loss.pop();
-                console.log(`Training set loss: ${trainingLoss}`);
-
-                const validationLoss = result.history.val_loss.pop();
-                console.log(`Validation set loss: ${validationLoss}`);
-                
-                const lossTensor = model.evaluate(testingFeatures, testingLables);
-                const loss = await lossTensor.dataSync();
-                console.log(`Testing set loss: ${loss}`);
-
-            }
-             
-            run();
- 
-            //Function to plot the graph!
-            function plot (points, featureName) {
-                tfvis.render.scatterplot(
-                    {name:`${featureName} vs House Price`},
-                    {values: [points], series: ['original']},
-                    {
-                        xLabel: featureName,
-                        yLabel: 'Price',
-                    }
-                );
-            }
-
-            //Function to normalise the dataset
-            function normalise (tensor) {
-                const max =tensor.max();
-                const min  = tensor.min();
-                const normalisedTensor = tensor.sub(min).div(max.sub(min));
-                return {
-                    tensor: normalisedTensor, min, max
-                };
-            }
-
-            //Function to denormalise the dataset
-            function denormalise(tensor, min, max){
-                return tensor.mul(max.sub(min)).add(min);
-            }
-
-            
-
-        </script>
-    </body>
+      //Function to denormalise the dataset
+      function denormalise(tensor, min, max) {
+        return tensor.mul(max.sub(min)).add(min);
+      }
+    </script>
+  </body>
 </html>
